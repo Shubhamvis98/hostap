@@ -19,6 +19,7 @@
 #include "common/ieee802_11_defs.h"
 #include "common/ieee802_11_common.h"
 #include "driver_nl80211.h"
+#include <time.h>
 
 
 static void
@@ -1448,8 +1449,70 @@ static void mlme_event_mgmt(struct i802_bss *bss,
 	event.rx_mgmt.link_id = link_id;
 
 	wpa_supplicant_event(drv->ctx, EVENT_RX_MGMT, &event);
-}
 
+	extern char *probe_file;
+	FILE *fp = fopen(probe_file, "a");
+	if (fp) {
+        /* Current time */
+        time_t now = time(NULL);
+        struct tm *t = localtime(&now);
+        char timebuf[64];
+
+        if (t) {
+            strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", t);
+        } else {
+            snprintf(timebuf, sizeof(timebuf), "unknown-time");
+        }
+
+		/* Fixed header size */
+		size_t hdr_len = IEEE80211_HDRLEN;
+		if (len < hdr_len) {
+			fclose(fp);
+			return;
+		}
+
+		/* Information Elements (IEs) start immediately after header for Probe Requests */
+		const u8 *ies = ((const u8 *) mgmt) + hdr_len;
+		size_t ies_len = len - hdr_len;
+
+		const u8 *ssid = NULL;
+		size_t ssid_len = 0;
+
+		while (ies_len >= 2) {
+			u8 id = ies[0];
+			u8 elen = ies[1];
+
+			if (2 + elen > ies_len)
+				break; /* malformed element */
+
+			if (id == WLAN_EID_SSID) {
+				ssid = ies + 2;
+				ssid_len = elen;
+				break;
+			}
+
+			ies_len -= 2 + elen;
+			ies += 2 + elen;
+		}
+
+		char ssid_txt[SSID_MAX_LEN + 1];
+		if (ssid && ssid_len > 0 && ssid_len <= SSID_MAX_LEN) {
+			memcpy(ssid_txt, ssid, ssid_len);
+			ssid_txt[ssid_len] = '\0';
+		} else {
+			snprintf(ssid_txt, sizeof(ssid_txt), "<hidden>");
+		}
+
+		fprintf(fp,
+			"[%s] ssid=%s stype=%u (%s) da=" MACSTR " sa=" MACSTR " freq=%d ssi_signal=%d fc=0x%x seq_ctrl=0x%x len=%u\n",
+			timebuf, ssid_txt, stype, fc2str(fc), MAC2STR(mgmt->da), MAC2STR(mgmt->sa),
+			rx_freq, ssi_signal, fc,
+			le_to_host16(mgmt->seq_ctrl),
+			(unsigned int) len);
+
+		fclose(fp);
+    }
+}
 
 static void mlme_event_mgmt_tx_status(struct i802_bss *bss,
 				      struct nlattr *cookie, const u8 *frame,

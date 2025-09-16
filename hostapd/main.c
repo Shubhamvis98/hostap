@@ -640,7 +640,9 @@ static void usage(void)
 		"   -S   start all the interfaces synchronously\n"
 		"   -t   include timestamps in some debug messages\n"
 		"   -v   show hostapd version\n"
-		"   -q   show less debug messages (-qq for even less)\n");
+		"   -q   show less debug messages (-qq for even less)\n"
+		"   -p   store all probe and assoc requests to a file\n"
+	);
 
 	exit(1);
 }
@@ -804,7 +806,7 @@ static void hostapd_global_cleanup_mld(struct hapd_interfaces *interfaces)
 #endif /* CONFIG_IEEE80211BE */
 }
 
-
+const char *probe_file = NULL;
 int main(int argc, char *argv[])
 {
 	struct hapd_interfaces interfaces;
@@ -859,7 +861,7 @@ int main(int argc, char *argv[])
 #endif /* CONFIG_DPP */
 
 	for (;;) {
-		c = getopt(argc, argv, "b:Bde:f:hi:KP:sSTtu:vg:G:q");
+		c = getopt(argc, argv, "b:Bde:f:hi:KP:sSTtu:vg:G:qp:");
 		if (c < 0)
 			break;
 		switch (c) {
@@ -934,6 +936,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'q':
 			wpa_debug_level++;
+			break;
+		case 'p':
+			probe_file = optarg;
 			break;
 		default:
 			usage();
